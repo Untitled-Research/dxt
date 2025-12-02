@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+    # Python
+    dev:
+        build:
+            context: ..
+            dockerfile: ./.devcontainer/dev.Dockerfile
+        env_file:
+            - ../.env
+        volumes:
+            - ..:/workspace:cached
+            - node-modules:/workspace/node_modules
+        depends_on:
+            - postgres
+        # Runs app on the same network as the database container, allows "forwardPorts" in devcontainer.json function.
+        network_mode: service:postgres
+        # Overrides default command so things don't shut down after the process ends.
+        command: sleep infinity
+    # Postgres for local dev
+    postgres:
+        image: postgres:17
+        restart: unless-stopped
+        volumes:
+            - postgres-data:/var/lib/postgresql/data
+        env_file:
+            - ../.env
+        ports:
+            - 5532:5432
+volumes:
+    postgres-data:
+    node-modules:
