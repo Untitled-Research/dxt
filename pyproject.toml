@@ -3,14 +3,14 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "xlt"
-version = "0.1.0"
+name = "dxt-core"
+version = "0.0.1"
 description = "A lightweight Extract-Load tool for building simple, reliable batch data transfer pipelines"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
-    {name = "XLT Contributors"}
+    {name = "DXT Contributors"}
 ]
 keywords = ["etl", "elt", "data", "pipeline", "extract", "load", "yaml"]
 classifiers = [
@@ -44,27 +44,27 @@ postgres = [
     "psycopg[binary]>=3.1.0",
 ]
 all = [
-    "xlt[postgres]",
+    "dxt[postgres]",
 ]
 
 [project.scripts]
-xlt = "xlt.cli:app"
+dxt = "dxt.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/yourusername/xlt"
-Documentation = "https://github.com/yourusername/xlt#readme"
-Repository = "https://github.com/yourusername/xlt"
-Issues = "https://github.com/yourusername/xlt/issues"
+Homepage = "https://github.com/Untitled-Research/dxt/dxt"
+Documentation = "https://github.com/Untitled-Research/dxt/dxt#readme"
+Repository = "https://github.com/Untitled-Research/dxt/dxt"
+Issues = "https://github.com/Untitled-Research/dxt/dxt/issues"
 
 [tool.hatch.build.targets.wheel]
-packages = ["xlt"]
+packages = ["dxt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --cov=xlt --cov-report=term-missing"
+addopts = "-v --cov=dxt --cov-report=term-missing"
 
 [tool.ruff]
 line-length = 100

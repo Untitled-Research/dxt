@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-echo "🚀 Initializing XLT development environment..."
+echo "🚀 Initializing DXT development environment..."
 
 # Install the package in editable mode with dev dependencies using uv
-echo "📦 Installing xlt in editable mode with uv..."
+echo "📦 Installing dxt in editable mode with uv..."
 uv pip install --system -e ".[dev]"
 
 # Verify installation
-echo "✅ Verifying xlt CLI installation..."
-xlt --version
+echo "✅ Verifying dxt CLI installation..."
+dxt --version
 
 echo "✨ Development environment ready!"

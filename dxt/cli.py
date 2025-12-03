@@ -1,14 +1,14 @@
-"""XLT CLI - Command-line interface for the data move tool."""
+"""DXT CLI - Command-line interface for the data move tool."""
 
 import typer
 from typing_extensions import Annotated
 from pathlib import Path
 
-from xlt import __version__
+from dxt import __version__
 
 app = typer.Typer(
-    name="xlt",
-    help="XLT - The YAML-first Data Move Tool",
+    name="dxt",
+    help="DXT - The YAML-first Data Move Tool",
     add_completion=True,
 )
 
@@ -16,7 +16,7 @@ app = typer.Typer(
 def version_callback(value: bool) -> None:
     """Show version and exit."""
     if value:
-        typer.echo(f"xlt version {__version__}")
+        typer.echo(f"dxt version {__version__}")
         raise typer.Exit()
 
 
@@ -33,7 +33,7 @@ def main(
         ),
     ] = False,
 ) -> None:
-    """XLT - Extract and Load data with declarative YAML pipelines."""
+    """DXT - Extract and Load data with declarative YAML pipelines."""
     pass
 
 

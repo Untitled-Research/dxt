@@ -2,7 +2,7 @@
 // https://github.com/microsoft/vscode-dev-containers/tree/v0.140.1/containers/python-3-postgres
 // Update the VARIANT arg in docker-compose.yml to pick a Python version: 3, 3.8, 3.7, 3.6
 {
-  "name": "XLT",
+  "name": "DXT",
   "context": "..",
   "dockerComposeFile": "docker-compose.yml",
   "service": "dev",
