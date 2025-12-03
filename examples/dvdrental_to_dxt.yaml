@@ -1,0 +1,56 @@
+version: 1
+name: dvdrental_to_dxt
+description: "Extract film data from dvdrental and load to dxt database"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+buffer:
+  format: parquet
+  compression: snappy
+  persist: true
+  cleanup_on_success: true
+
+streams:
+  - id: film
+    source: public.film
+    target: public.film
+    tags:
+      - sample
+      - dvdrental
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+      - id: description
+        dtype: string
+      - id: release_year
+        dtype: int32
+      - id: language_id
+        dtype: int16
+      - id: rental_duration
+        dtype: int16
+      - id: rental_rate
+        dtype: decimal
+        precision: 10
+        scale: 2
+      - id: length
+        dtype: int16
+      - id: replacement_cost
+        dtype: decimal
+        precision: 10
+        scale: 2
+      - id: rating
+        dtype: string
+      - id: last_update
+        dtype: timestamp
+    extract:
+      mode: full
+      batch_size: 100
+    load:
+      mode: append
+      batch_size: 100

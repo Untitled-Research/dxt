@@ -11,4 +11,9 @@ uv pip install --system -e ".[dev]"
 echo "✅ Verifying dxt CLI installation..."
 dxt --version
 
+# Restore the dvdrental sample database
+echo ""
+bash scripts/restore-dvdrental.sh
+
+echo ""
 echo "✨ Development environment ready!"

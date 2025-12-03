@@ -510,7 +510,7 @@ class Stream:
     id: str  # Unique identifier within pipeline
     source: str  # Source reference: table name, query, file path, API endpoint
     target: str  # Target reference: table/collection/file
-    kind: str = "table"  # "table", "query", "view", "file", "api"
+    # kind field removed - use source.type instead
     tags: List[str] = field(default_factory=list)  # For selector filtering
 
     # Query building (for kind="table" only)
@@ -812,7 +812,7 @@ buffer:
 streams:
   # Table source with criteria and field definitions
   - id: orders
-    kind: table
+    # kind removed - type inferred from source
     source: public.orders
     target: analytics.orders
     tags: [critical, daily]
@@ -850,7 +850,7 @@ streams:
 
   # Query source (custom SQL)
   - id: order_summary
-    kind: query
+    # kind removed - use type: sql
     source: "SELECT order_id, SUM(total) as total FROM orders GROUP BY order_id"
     target: analytics.order_summary
     tags: [aggregated, daily]
@@ -870,7 +870,7 @@ streams:
 
   # Simple table with minimal config (infer fields, use defaults)
   - id: customers
-    kind: table
+    # kind removed - type inferred from source
     source: public.customers
     target: analytics.customers
     tags: [reference, daily]
@@ -880,7 +880,7 @@ streams:
 
   # API source with system-specific options
   - id: api_events
-    kind: api
+    # kind removed - use type: http
     source: /api/v1/events
     target: events.raw
     tags: [api, hourly]
@@ -1405,7 +1405,7 @@ connection: postgres_prod
 discovered_at: "2025-12-02T10:30:00Z"
 streams:
   - id: customers
-    kind: table
+    # kind removed - type inferred from source
     source: public.customers
     fields:
       - name: customer_id
@@ -1419,7 +1419,7 @@ streams:
         nullable: false
 
   - id: orders
-    kind: table
+    # kind removed - type inferred from source
     source: public.orders
     fields:
       - name: order_id

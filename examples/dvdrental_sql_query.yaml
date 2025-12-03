@@ -1,0 +1,51 @@
+version: 1
+name: dvdrental_sql_query
+description: "Extract films using SQL query and load to dxt database"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE:-dxt}"
+
+buffer:
+  format: parquet
+  compression: snappy
+  persist: true
+  cleanup_on_success: true
+
+streams:
+  # Example 1: Explicit SQL query
+  - id: recent_films
+    source:
+      type: sql
+      sql: |
+        SELECT film_id, title, release_year, rental_rate, replacement_cost
+        FROM public.film
+        WHERE release_year >= 2006
+        ORDER BY release_year DESC, title
+    target: public.recent_films
+    tags:
+      - sql
+      - filtered
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+      - id: release_year
+        dtype: int32
+      - id: rental_rate
+        dtype: decimal
+        precision: 10
+        scale: 2
+      - id: replacement_cost
+        dtype: decimal
+        precision: 10
+        scale: 2
+    extract:
+      mode: full
+      batch_size: 100
+    load:
+      mode: replace
+      batch_size: 100
