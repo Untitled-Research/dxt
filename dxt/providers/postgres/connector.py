@@ -1,4 +1,4 @@
-"""PostgreSQL connector implementation using SQLAlchemy.
+"""PostgreSQL connector implementation.
 
 This module provides connection management for PostgreSQL databases.
 """
@@ -7,29 +7,29 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from dxt.operators.sql.connector import SQLConnector
 from dxt.core.type_mapper import TypeMapper
 from dxt.exceptions import ConnectorError
-from dxt.operators.postgres.type_mapper import PostgresTypeMapper
+from dxt.providers.base.relational import RelationalConnector
+from dxt.providers.postgres.type_mapper import PostgresTypeMapper
 
 
-class PostgresConnector(SQLConnector):
+class PostgresConnector(RelationalConnector):
     """PostgreSQL connector using SQLAlchemy.
 
     Manages connections to PostgreSQL databases and provides
     schema introspection and query execution.
 
-    Configuration keys:
+    Configuration:
         - host: Database host (default: localhost)
         - port: Database port (default: 5432)
         - database: Database name (required)
         - user: Username (required)
         - password: Password (required)
         - schema: Default schema (default: public)
-        - connection_string: Full connection string (alternative to individual params)
+        - connection_string: Full connection string (alternative to params)
         - echo: Enable SQL logging (default: False)
 
-    Examples:
+    Example:
         >>> config = {
         ...     "host": "localhost",
         ...     "port": 5432,
@@ -39,7 +39,8 @@ class PostgresConnector(SQLConnector):
         ... }
         >>> with PostgresConnector(config) as conn:
         ...     schema = conn.get_schema("public.orders")
-        ...     results = conn.execute_query("SELECT * FROM orders LIMIT 10")
+        ...     for row in conn.execute("SELECT * FROM orders LIMIT 10"):
+        ...         print(row)
     """
 
     def _build_connection_string(self) -> str:
@@ -51,11 +52,9 @@ class PostgresConnector(SQLConnector):
         Raises:
             ConnectorError: If required config is missing
         """
-        # If connection_string provided, use it directly
         if "connection_string" in self.config:
             return self.config["connection_string"]
 
-        # Build from individual parameters
         required_keys = ["database", "user", "password"]
         for key in required_keys:
             if key not in self.config:
@@ -89,7 +88,6 @@ class PostgresConnector(SQLConnector):
         if len(parts) == 2:
             return parts[0], parts[1]
         elif len(parts) == 1:
-            # Use default schema from config or 'public'
             default_schema = self.config.get("schema", "public")
             return default_schema, parts[0]
         else:

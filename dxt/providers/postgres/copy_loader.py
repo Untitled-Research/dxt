@@ -6,11 +6,11 @@ import io
 from datetime import datetime
 from typing import Any, Optional
 
-from dxt.core.buffer import Buffer
+from dxt.buffers import Buffer
 from dxt.exceptions import LoaderError
 from dxt.models.results import LoadResult
 from dxt.models.stream import Stream
-from dxt.operators.postgres.loader import PostgresLoader
+from dxt.providers.postgres.loader import PostgresLoader
 
 
 class PostgresCopyLoader(PostgresLoader):
@@ -18,6 +18,10 @@ class PostgresCopyLoader(PostgresLoader):
 
     Much faster than INSERT for bulk loading large datasets.
     Uses psycopg's COPY protocol for streaming data.
+
+    This loader can work in two modes:
+    1. Read records from buffer and convert to CSV for COPY
+    2. Use staged CSV files directly if buffer format is CSV
 
     Configuration options (via loader_config):
     - copy_format: "csv" (default) or "binary"
@@ -27,12 +31,12 @@ class PostgresCopyLoader(PostgresLoader):
     - escape_char: Escape character for CSV (default: '"')
 
     Examples:
-        YAML specification with full module path:
+        YAML specification:
         ```yaml
         target:
           connection: postgres_target
           object: staging.large_table
-          loader: dxt.operators.postgres.copy_loader.PostgresCopyLoader
+          loader: dxt.providers.postgres.PostgresCopyLoader
           loader_config:
             copy_format: csv
             delimiter: ","
@@ -61,29 +65,38 @@ class PostgresCopyLoader(PostgresLoader):
         self.quote_char = self.config.get("quote_char", '"')
         self.escape_char = self.config.get("escape_char", '"')
 
-    def _load_append(self, stream: Stream, buffer: Buffer) -> LoadResult:
-        """Load using COPY FROM STDIN instead of INSERT.
+    def load(self, buffer: Buffer, stream: Stream) -> LoadResult:
+        """Load data using COPY protocol.
 
-        Overrides parent's _load_append to use COPY protocol.
+        If buffer has staged CSV files with matching format options,
+        uses them directly. Otherwise, reads records and converts to CSV.
+
+        Args:
+            buffer: Buffer containing data to load
+            stream: Stream configuration
+
+        Returns:
+            LoadResult with statistics
         """
         started_at = datetime.now()
-        records_loaded = 0
 
         try:
             table_name = self._format_table_name(stream.target.value)
-            fields = stream.fields if stream.fields else buffer.fields
-            field_names = [f.target_name for f in fields]
 
-            if self.copy_format == "csv":
-                records_loaded = self._copy_from_csv(
-                    table_name, field_names, fields, buffer, stream.load.batch_size
-                )
-            elif self.copy_format == "binary":
-                records_loaded = self._copy_from_binary(
-                    table_name, field_names, fields, buffer, stream.load.batch_size
+            # Use buffer's field accessors - it handles stream.fields vs buffer.schema
+            field_names = buffer.target_field_names
+
+            # Check if we can use staged files directly
+            staged_files = buffer.get_staged_files()
+            if staged_files and staged_files[0].format == "csv":
+                records_loaded = self._copy_from_staged_files(
+                    table_name, field_names, staged_files
                 )
             else:
-                raise LoaderError(f"Unsupported COPY format: {self.copy_format}")
+                # Read records and convert to CSV
+                records_loaded = self._copy_from_records(
+                    table_name, field_names, buffer
+                )
 
             completed_at = datetime.now()
             duration = (completed_at - started_at).total_seconds()
@@ -103,22 +116,59 @@ class PostgresCopyLoader(PostgresLoader):
         except Exception as e:
             raise LoaderError(f"Failed to load with COPY: {e}") from e
 
-    def _copy_from_csv(
+    def _copy_from_staged_files(
         self,
         table_name: str,
         field_names: list[str],
-        fields: list,
-        buffer: Buffer,
-        batch_size: int,
+        staged_files: list,
     ) -> int:
-        """Execute COPY FROM STDIN with CSV format.
+        """Execute COPY FROM using staged CSV files.
 
         Args:
             table_name: Target table name
             field_names: List of column names
-            fields: Field definitions
-            buffer: Buffer to read from
-            batch_size: Records per batch
+            staged_files: List of StagedFile objects
+
+        Returns:
+            Number of records loaded
+        """
+        records_loaded = 0
+
+        raw_conn = self.connector.engine.raw_connection()
+        try:
+            cursor = raw_conn.cursor()
+
+            for staged_file in staged_files:
+                with open(staged_file.path, "r") as f:
+                    # Build COPY command
+                    copy_sql = f"""
+                    COPY {table_name} ({','.join(field_names)})
+                    FROM STDIN
+                    WITH (FORMAT CSV, HEADER true, DELIMITER '{self.delimiter}', NULL '{self.null_string}')
+                    """
+
+                    cursor.copy_expert(copy_sql, f)
+                    records_loaded += staged_file.row_count or 0
+
+            raw_conn.commit()
+
+        finally:
+            raw_conn.close()
+
+        return records_loaded
+
+    def _copy_from_records(
+        self,
+        table_name: str,
+        field_names: list[str],
+        buffer: Buffer,
+    ) -> int:
+        """Execute COPY FROM STDIN by converting records to CSV.
+
+        Args:
+            table_name: Target table name
+            field_names: List of column names (target names)
+            buffer: Buffer to read records from
 
         Returns:
             Number of records loaded
@@ -127,17 +177,18 @@ class PostgresCopyLoader(PostgresLoader):
         csv_buffer = io.StringIO()
         records_count = 0
 
-        for batch in buffer.read_batches(batch_size):
-            for record in batch:
-                # Write CSV row
-                values = []
-                for field in fields:
-                    value = record.get(field.id)
-                    csv_value = self._format_csv_value(value)
-                    values.append(csv_value)
+        # Buffer.read_records() applies field mapping (source_id → target_name)
+        # and type coercion, so records come with target field names
+        for record in buffer.read_records():
+            # Write CSV row using target field names
+            values = []
+            for field_name in field_names:
+                value = record.get(field_name)
+                csv_value = self._format_csv_value(value)
+                values.append(csv_value)
 
-                csv_buffer.write(self.delimiter.join(values) + "\n")
-                records_count += 1
+            csv_buffer.write(self.delimiter.join(values) + "\n")
+            records_count += 1
 
         # Reset buffer position
         csv_buffer.seek(0)
@@ -162,23 +213,6 @@ class PostgresCopyLoader(PostgresLoader):
             raw_conn.close()
 
         return records_count
-
-    def _copy_from_binary(
-        self,
-        table_name: str,
-        field_names: list[str],
-        fields: list,
-        buffer: Buffer,
-        batch_size: int,
-    ) -> int:
-        """Execute COPY FROM STDIN with binary format.
-
-        Binary format is faster than CSV but more complex.
-        Requires careful encoding of PostgreSQL binary format.
-
-        For now, raises NotImplementedError - future enhancement.
-        """
-        raise LoaderError("Binary COPY format not yet implemented. Use copy_format: csv")
 
     def _format_csv_value(self, value: Any) -> str:
         """Format value for CSV output.
@@ -226,3 +260,17 @@ class PostgresCopyLoader(PostgresLoader):
         else:
             # Default: convert to string
             return str(value)
+
+    def _format_table_name(self, table_ref: str) -> str:
+        """Format table reference for SQL.
+
+        Args:
+            table_ref: Table reference (schema.table or table)
+
+        Returns:
+            Formatted table name
+        """
+        if "." in table_ref:
+            schema, table = table_ref.split(".", 1)
+            return f'"{schema}"."{table}"'
+        return f'"{table_ref}"'

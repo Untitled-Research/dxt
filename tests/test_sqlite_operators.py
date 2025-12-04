@@ -8,7 +8,7 @@ from dxt.buffers.memory import MemoryBuffer
 from dxt.models.field import DXTType, Field
 from dxt.models.source import SourceConfig
 from dxt.models.stream import ExtractConfig, LoadConfig, Stream
-from dxt.operators.sqlite import SQLiteConnector, SQLiteExtractor, SQLiteLoader
+from dxt.providers.sqlite import SQLiteConnector, SQLiteExtractor, SQLiteLoader
 
 
 @pytest.fixture

@@ -14,10 +14,10 @@ class TestOperatorResolution:
         executor = PipelineExecutor()
 
         module_path, class_name = executor._resolve_operator_spec(
-            "dxt.operators.postgres.copy_loader.PostgresCopyLoader", "loader", "postgresql"
+            "dxt.providers.postgres.copy_loader.PostgresCopyLoader", "loader", "postgresql"
         )
 
-        assert module_path == "dxt.operators.postgres.copy_loader"
+        assert module_path == "dxt.providers.postgres.copy_loader"
         assert class_name == "PostgresCopyLoader"
 
     def test_resolve_package_reexport_path(self):
@@ -26,10 +26,10 @@ class TestOperatorResolution:
 
         # This should work because PostgresCopyLoader is re-exported in __init__.py
         module_path, class_name = executor._resolve_operator_spec(
-            "dxt.operators.postgres.PostgresCopyLoader", "loader", "postgresql"
+            "dxt.providers.postgres.PostgresCopyLoader", "loader", "postgresql"
         )
 
-        assert module_path == "dxt.operators.postgres"
+        assert module_path == "dxt.providers.postgres"
         assert class_name == "PostgresCopyLoader"
 
     def test_resolve_default_operator(self):
@@ -41,7 +41,7 @@ class TestOperatorResolution:
             None, "loader", "postgresql"
         )
 
-        assert module_path == "dxt.operators.postgres.loader"
+        assert module_path == "dxt.providers.postgres.loader"
         assert class_name == "PostgresLoader"
 
     def test_resolve_custom_operator(self):
@@ -57,11 +57,11 @@ class TestOperatorResolution:
         assert class_name == "CustomLoader"
 
     def test_missing_protocol_error(self):
-        """Test error when no default for protocol."""
+        """Test error when no default operator for protocol."""
         executor = PipelineExecutor()
 
         with pytest.raises(
-            PipelineExecutionError, match="No default operators registered for protocol"
+            PipelineExecutionError, match="No default operator registered for protocol"
         ):
             executor._resolve_operator_spec(None, "loader", "mongodb")
 
@@ -78,7 +78,7 @@ class TestOperatorResolution:
 
         with pytest.raises(PipelineExecutionError, match="Class .* not found in module"):
             # Try to import a class that doesn't exist from a real module
-            executor._load_operator_class("dxt.operators.postgres", "NonExistentClass")
+            executor._load_operator_class("dxt.providers.postgres", "NonExistentClass")
 
 
 class TestOperatorLoading:
@@ -89,7 +89,7 @@ class TestOperatorLoading:
         executor = PipelineExecutor()
 
         operator_class = executor._load_operator_class(
-            "dxt.operators.postgres.copy_loader", "PostgresCopyLoader"
+            "dxt.providers.postgres.copy_loader", "PostgresCopyLoader"
         )
 
         assert operator_class.__name__ == "PostgresCopyLoader"
@@ -100,18 +100,18 @@ class TestOperatorLoading:
 
         # This should work because PostgresCopyLoader is in __all__
         operator_class = executor._load_operator_class(
-            "dxt.operators.postgres", "PostgresCopyLoader"
+            "dxt.providers.postgres", "PostgresCopyLoader"
         )
 
         assert operator_class.__name__ == "PostgresCopyLoader"
 
-    def test_load_sql_loader(self):
-        """Test loading generic SQLLoader."""
+    def test_load_sqlite_loader(self):
+        """Test loading SQLiteLoader."""
         executor = PipelineExecutor()
 
-        operator_class = executor._load_operator_class("dxt.operators.sql", "SQLLoader")
+        operator_class = executor._load_operator_class("dxt.providers.sqlite", "SQLiteLoader")
 
-        assert operator_class.__name__ == "SQLLoader"
+        assert operator_class.__name__ == "SQLiteLoader"
 
 
 class TestDefaultOperators:
@@ -123,7 +123,7 @@ class TestDefaultOperators:
 
         module_path, class_name = executor._get_default_operator("postgresql", "loader")
 
-        assert module_path == "dxt.operators.postgres.loader"
+        assert module_path == "dxt.providers.postgres.loader"
         assert class_name == "PostgresLoader"
 
     def test_get_default_sqlite_extractor(self):
@@ -132,7 +132,7 @@ class TestDefaultOperators:
 
         module_path, class_name = executor._get_default_operator("sqlite", "extractor")
 
-        assert module_path == "dxt.operators.sqlite.extractor"
+        assert module_path == "dxt.providers.sqlite.extractor"
         assert class_name == "SQLiteExtractor"
 
     def test_protocol_normalization(self):
@@ -144,7 +144,7 @@ class TestDefaultOperators:
             "postgresql", "connector"
         )
 
-        assert module_path == "dxt.operators.postgres.connector"
+        assert module_path == "dxt.providers.postgres.connector"
         assert class_name == "PostgresConnector"
 
 

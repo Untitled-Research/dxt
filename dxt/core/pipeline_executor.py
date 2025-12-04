@@ -22,17 +22,17 @@ from dxt.models.results import ExecutionResult, StreamResult
 from dxt.models.stream import Stream
 
 
-# Default operator registry - maps protocol to default operators
+# Default operators - maps protocol to default operator classes
 DEFAULT_OPERATORS = {
     "postgresql": {
-        "connector": "dxt.operators.postgres.connector.PostgresConnector",
-        "extractor": "dxt.operators.postgres.extractor.PostgresExtractor",
-        "loader": "dxt.operators.postgres.loader.PostgresLoader",
+        "connector": "dxt.providers.postgres.connector.PostgresConnector",
+        "extractor": "dxt.providers.postgres.extractor.PostgresExtractor",
+        "loader": "dxt.providers.postgres.loader.PostgresLoader",
     },
     "sqlite": {
-        "connector": "dxt.operators.sqlite.connector.SQLiteConnector",
-        "extractor": "dxt.operators.sqlite.extractor.SQLiteExtractor",
-        "loader": "dxt.operators.sqlite.loader.SQLiteLoader",
+        "connector": "dxt.providers.sqlite.connector.SQLiteConnector",
+        "extractor": "dxt.providers.sqlite.extractor.SQLiteExtractor",
+        "loader": "dxt.providers.sqlite.loader.SQLiteLoader",
     },
     # Future: mysql, duckdb, etc.
 }
@@ -300,11 +300,11 @@ class PipelineExecutor:
         """Dynamically import and return operator class.
 
         Args:
-            module_path: e.g., "dxt.operators.postgres.copy_loader"
+            module_path: e.g., "dxt.providers.postgres.copy_loader"
             class_name: e.g., "PostgresCopyLoader"
 
         Returns:
-            Operator class
+            Operator class (Connector, Extractor, or Loader)
 
         Raises:
             PipelineExecutionError: If module/class not found
@@ -348,16 +348,16 @@ class PipelineExecutor:
         2. If spec is full module path → parse module + class
 
         Supports both forms:
-        - "dxt.operators.postgres.PostgresCopyLoader" (package re-export)
-        - "dxt.operators.postgres.copy_loader.PostgresCopyLoader" (full path)
+        - "dxt.providers.postgres.PostgresCopyLoader" (package re-export)
+        - "dxt.providers.postgres.copy_loader.PostgresCopyLoader" (full path)
         """
         if spec is None:
             # Use default operator for this protocol
             return self._get_default_operator(connection_protocol, operator_type)
 
         # Full module path specified
-        # Parse: "dxt.operators.postgres.PostgresCopyLoader"
-        #    OR: "dxt.operators.postgres.copy_loader.PostgresCopyLoader"
+        # Parse: "dxt.providers.postgres.PostgresCopyLoader"
+        #    OR: "dxt.providers.postgres.copy_loader.PostgresCopyLoader"
         #    OR: "mycompany.etl.CustomLoader"
         parts = spec.split(".")
         class_name = parts[-1]
@@ -379,16 +379,16 @@ class PipelineExecutor:
         """
         if protocol not in DEFAULT_OPERATORS:
             raise PipelineExecutionError(
-                f"No default operators registered for protocol '{protocol}'.\n"
+                f"No default operator registered for protocol '{protocol}'.\n"
                 f"Available protocols: {', '.join(DEFAULT_OPERATORS.keys())}\n"
-                f"Please specify a custom operator in your YAML configuration:\n"
-                f"  {operator_type}: your.custom.operator.ClassName"
+                f"Please specify an operator in your YAML configuration:\n"
+                f"  {operator_type}: dxt.providers.your_provider.ClassName"
             )
 
         if operator_type not in DEFAULT_OPERATORS[protocol]:
             raise PipelineExecutionError(
                 f"No default {operator_type} registered for protocol '{protocol}'.\n"
-                f"Please specify a custom {operator_type} in your YAML configuration."
+                f"Please specify a {operator_type} in your YAML configuration."
             )
 
         # Get full module path from registry
