@@ -1,0 +1,45 @@
+version: 1
+name: pipeline_with_copy_loader
+description: "Pipeline using PostgreSQL COPY loader for performance"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+buffer:
+  format: memory
+
+streams:
+  # This stream uses PostgresCopyLoader variant (short form - package re-export)
+  - id: large_film_table
+    source: public.film
+    target:
+      type: relation
+      value: public.film_copy
+      # Use high-performance COPY loader instead of INSERT
+      loader: dxt.operators.postgres.PostgresCopyLoader
+      loader_config:
+        copy_format: csv
+        delimiter: ","
+        batch_size: 1000
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+      - id: description
+        dtype: string
+      - id: release_year
+        dtype: int32
+      - id: rental_rate
+        dtype: decimal
+        precision: 10
+        scale: 2
+    extract:
+      mode: full
+      batch_size: 500
+    load:
+      mode: append
+      batch_size: 1000

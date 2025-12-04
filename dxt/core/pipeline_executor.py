@@ -6,6 +6,7 @@ extract and load operations.
 
 from __future__ import annotations
 
+import importlib
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -19,6 +20,22 @@ from dxt.exceptions import PipelineExecutionError
 from dxt.models.pipeline import Pipeline
 from dxt.models.results import ExecutionResult, StreamResult
 from dxt.models.stream import Stream
+
+
+# Default operator registry - maps protocol to default operators
+DEFAULT_OPERATORS = {
+    "postgresql": {
+        "connector": "dxt.operators.postgres.connector.PostgresConnector",
+        "extractor": "dxt.operators.postgres.extractor.PostgresExtractor",
+        "loader": "dxt.operators.postgres.loader.PostgresLoader",
+    },
+    "sqlite": {
+        "connector": "dxt.operators.sqlite.connector.SQLiteConnector",
+        "extractor": "dxt.operators.sqlite.extractor.SQLiteExtractor",
+        "loader": "dxt.operators.sqlite.loader.SQLiteLoader",
+    },
+    # Future: mysql, duckdb, etc.
+}
 
 
 class PipelineExecutor:
@@ -35,25 +52,7 @@ class PipelineExecutor:
 
     def __init__(self):
         """Initialize pipeline executor."""
-        self._operator_registry: dict[str, dict[str, type]] = {}
-        self._register_builtin_operators()
-
-    def _register_builtin_operators(self) -> None:
-        """Register built-in operators."""
-        try:
-            from dxt.operators.postgres import (
-                PostgresConnector,
-                PostgresExtractor,
-                PostgresLoader,
-            )
-
-            self._operator_registry["postgres"] = {
-                "connector": PostgresConnector,
-                "extractor": PostgresExtractor,
-                "loader": PostgresLoader,
-            }
-        except ImportError:
-            pass  # PostgreSQL operator not available
+        pass  # No initialization needed - using dynamic loading
 
     def execute(
         self,
@@ -153,16 +152,57 @@ class PipelineExecutor:
             StreamResult with metrics
         """
         try:
-            # Create source and target connectors
-            source_type = self._get_connection_type(pipeline.source.connection)
-            target_type = self._get_connection_type(pipeline.target.connection)
+            # Resolve operator specs (stream-level overrides, then pipeline defaults, then infer)
+            source_extractor_spec = (
+                stream.source.extractor
+                or (pipeline.extract.extractor if pipeline.extract else None)
+            )
+            target_loader_spec = (
+                stream.target.loader or (pipeline.load.loader if pipeline.load else None)
+            )
 
-            source_connector = self._create_connector(source_type, pipeline.source.connection)
-            target_connector = self._create_connector(target_type, pipeline.target.connection)
+            # Resolve configs (merge stream + pipeline defaults)
+            # Convert pipeline extract/load defaults to config dicts
+            pipeline_extract_config = None
+            if pipeline.extract:
+                pipeline_extract_config = pipeline.extract.model_dump(exclude_none=True, exclude={"extractor"})
 
-            # Create extractor and loader
-            extractor = self._create_extractor(source_type, source_connector)
-            loader = self._create_loader(target_type, target_connector)
+            pipeline_load_config = None
+            if pipeline.load:
+                pipeline_load_config = pipeline.load.model_dump(exclude_none=True, exclude={"loader"})
+
+            extractor_config = self._merge_configs(
+                pipeline_extract_config,
+                stream.source.extractor_config,
+            )
+            loader_config = self._merge_configs(
+                pipeline_load_config,
+                stream.target.loader_config,
+            )
+
+            # Create connectors
+            source_connector = self._create_connector(
+                pipeline.source.connection,
+                stream.source.connector,
+                stream.source.connector_config,
+            )
+            target_connector = self._create_connector(
+                pipeline.target.connection,
+                stream.target.connector,
+                stream.target.connector_config,
+            )
+
+            # Create extractor and loader with dynamic loading
+            extractor = self._create_extractor(
+                source_connector,
+                source_extractor_spec,
+                extractor_config,
+            )
+            loader = self._create_loader(
+                target_connector,
+                target_loader_spec,
+                loader_config,
+            )
 
             # Create buffer
             buffer = self._create_buffer(pipeline, stream)
@@ -231,42 +271,173 @@ class PipelineExecutor:
 
         return pipeline.get_streams_by_selector(select)
 
-    def _get_connection_type(self, connection: str) -> str:
-        """Extract connection type from connection string or reference.
+    def _get_connection_protocol(self, connection: str) -> str:
+        """Extract connection protocol from connection string.
 
         Args:
             connection: Connection string or reference
 
         Returns:
-            Connection type (e.g., "postgres", "mysql")
+            Connection protocol (e.g., "postgresql", "sqlite")
 
         Raises:
-            PipelineExecutionError: If type cannot be determined
+            PipelineExecutionError: If protocol cannot be determined
         """
         # Check if it's a connection string (starts with protocol)
         if "://" in connection:
             protocol = connection.split("://")[0]
-            # Map protocols to types
-            type_map = {
-                "postgresql": "postgres",
-                "postgres": "postgres",
-                "postgresql+psycopg": "postgres",
-                "postgresql+psycopg2": "postgres",
-                "mysql": "mysql",
-                "sqlite": "sqlite",
-            }
-            return type_map.get(protocol, protocol)
+            # Normalize protocol (strip dialect suffix)
+            normalized = protocol.split("+")[0]  # postgresql+psycopg → postgresql
+            return normalized
 
-        # Otherwise assume it's a reference - for now, default to postgres
+        # Otherwise assume it's a reference - for now, raise error
         # TODO: Load from dxt_project.yaml and get type from there
-        return "postgres"
+        raise PipelineExecutionError(
+            f"Connection references not yet implemented. Use connection strings. Got: {connection}"
+        )
 
-    def _create_connector(self, conn_type: str, connection: str) -> Connector:
-        """Create a connector instance.
+    def _load_operator_class(self, module_path: str, class_name: str) -> type:
+        """Dynamically import and return operator class.
 
         Args:
-            conn_type: Connection type
-            connection: Connection string or reference
+            module_path: e.g., "dxt.operators.postgres.copy_loader"
+            class_name: e.g., "PostgresCopyLoader"
+
+        Returns:
+            Operator class
+
+        Raises:
+            PipelineExecutionError: If module/class not found
+        """
+        try:
+            module = importlib.import_module(module_path)
+            operator_class = getattr(module, class_name)
+            return operator_class
+        except ImportError as e:
+            raise PipelineExecutionError(
+                f"Failed to import operator module '{module_path}'.\n"
+                f"Error: {e}\n"
+                f"Make sure the module exists and is importable."
+            ) from e
+        except AttributeError as e:
+            available_classes = [name for name in dir(module) if not name.startswith("_")]
+            raise PipelineExecutionError(
+                f"Class '{class_name}' not found in module '{module_path}'.\n"
+                f"Error: {e}\n"
+                f"Available classes: {available_classes}"
+            ) from e
+
+    def _resolve_operator_spec(
+        self,
+        spec: Optional[str],
+        operator_type: str,
+        connection_protocol: str,
+    ) -> tuple[str, str]:
+        """Resolve operator specification to (module_path, class_name).
+
+        Args:
+            spec: Full module path from YAML or None to use default
+            operator_type: "connector", "extractor", or "loader"
+            connection_protocol: e.g., "postgresql", "sqlite" (for defaults)
+
+        Returns:
+            Tuple of (module_path, class_name)
+
+        Resolution rules:
+        1. If spec is None → use default for connection protocol
+        2. If spec is full module path → parse module + class
+
+        Supports both forms:
+        - "dxt.operators.postgres.PostgresCopyLoader" (package re-export)
+        - "dxt.operators.postgres.copy_loader.PostgresCopyLoader" (full path)
+        """
+        if spec is None:
+            # Use default operator for this protocol
+            return self._get_default_operator(connection_protocol, operator_type)
+
+        # Full module path specified
+        # Parse: "dxt.operators.postgres.PostgresCopyLoader"
+        #    OR: "dxt.operators.postgres.copy_loader.PostgresCopyLoader"
+        #    OR: "mycompany.etl.CustomLoader"
+        parts = spec.split(".")
+        class_name = parts[-1]
+        module_path = ".".join(parts[:-1])
+        return module_path, class_name
+
+    def _get_default_operator(self, protocol: str, operator_type: str) -> tuple[str, str]:
+        """Get default operator for connection protocol.
+
+        Args:
+            protocol: e.g., "postgresql", "sqlite", "mysql"
+            operator_type: "connector", "extractor", or "loader"
+
+        Returns:
+            Tuple of (module_path, class_name)
+
+        Raises:
+            PipelineExecutionError: If no default exists for protocol
+        """
+        if protocol not in DEFAULT_OPERATORS:
+            raise PipelineExecutionError(
+                f"No default operators registered for protocol '{protocol}'.\n"
+                f"Available protocols: {', '.join(DEFAULT_OPERATORS.keys())}\n"
+                f"Please specify a custom operator in your YAML configuration:\n"
+                f"  {operator_type}: your.custom.operator.ClassName"
+            )
+
+        if operator_type not in DEFAULT_OPERATORS[protocol]:
+            raise PipelineExecutionError(
+                f"No default {operator_type} registered for protocol '{protocol}'.\n"
+                f"Please specify a custom {operator_type} in your YAML configuration."
+            )
+
+        # Get full module path from registry
+        full_path = DEFAULT_OPERATORS[protocol][operator_type]
+
+        # Parse into module + class
+        parts = full_path.split(".")
+        class_name = parts[-1]
+        module_path = ".".join(parts[:-1])
+
+        return module_path, class_name
+
+    def _merge_configs(
+        self, base_config: Optional[dict], override_config: Optional[dict]
+    ) -> Optional[dict]:
+        """Merge two configuration dictionaries.
+
+        Args:
+            base_config: Base configuration (e.g., pipeline defaults)
+            override_config: Override configuration (e.g., stream-level)
+
+        Returns:
+            Merged configuration with overrides taking precedence
+        """
+        if base_config is None and override_config is None:
+            return None
+
+        if base_config is None:
+            return override_config
+
+        if override_config is None:
+            return base_config
+
+        # Merge: override takes precedence
+        merged = {**base_config, **override_config}
+        return merged
+
+    def _create_connector(
+        self,
+        connection_string: str,
+        connector_spec: Optional[str] = None,
+        connector_config: Optional[dict] = None,
+    ) -> Connector:
+        """Create connector instance using dynamic loading.
+
+        Args:
+            connection_string: Database connection string
+            connector_spec: Optional operator spec from YAML
+            connector_config: Optional config dict for connector
 
         Returns:
             Connector instance
@@ -274,28 +445,37 @@ class PipelineExecutor:
         Raises:
             PipelineExecutionError: If connector cannot be created
         """
-        if conn_type not in self._operator_registry:
-            raise PipelineExecutionError(f"Unsupported connection type: {conn_type}")
+        # Get connection protocol
+        protocol = self._get_connection_protocol(connection_string)
 
-        connector_class = self._operator_registry[conn_type]["connector"]
+        # Resolve operator
+        module_path, class_name = self._resolve_operator_spec(
+            connector_spec, "connector", protocol
+        )
 
-        # Parse connection string into config
-        if "://" in connection:
-            config = {"connection_string": connection}
-        else:
-            # TODO: Load from dxt_project.yaml
-            raise PipelineExecutionError(
-                f"Connection references not yet implemented. Use connection strings."
-            )
+        # Load operator class
+        connector_class = self._load_operator_class(module_path, class_name)
 
+        # Create config
+        config = {"connection_string": connection_string}
+        if connector_config:
+            config.update(connector_config)
+
+        # Instantiate
         return connector_class(config)
 
-    def _create_extractor(self, conn_type: str, connector: Connector) -> Extractor:
-        """Create an extractor instance.
+    def _create_extractor(
+        self,
+        connector: Connector,
+        extractor_spec: Optional[str] = None,
+        extractor_config: Optional[dict] = None,
+    ) -> Extractor:
+        """Create extractor instance using dynamic loading.
 
         Args:
-            conn_type: Connection type
             connector: Connector instance
+            extractor_spec: Optional operator spec from YAML
+            extractor_config: Optional config dict for extractor
 
         Returns:
             Extractor instance
@@ -303,18 +483,32 @@ class PipelineExecutor:
         Raises:
             PipelineExecutionError: If extractor cannot be created
         """
-        if conn_type not in self._operator_registry:
-            raise PipelineExecutionError(f"Unsupported connection type: {conn_type}")
+        # Infer protocol from connector's connection string
+        protocol = self._get_connection_protocol(connector.config["connection_string"])
 
-        extractor_class = self._operator_registry[conn_type]["extractor"]
-        return extractor_class(connector)
+        # Resolve operator
+        module_path, class_name = self._resolve_operator_spec(
+            extractor_spec, "extractor", protocol
+        )
 
-    def _create_loader(self, conn_type: str, connector: Connector) -> Loader:
-        """Create a loader instance.
+        # Load operator class
+        extractor_class = self._load_operator_class(module_path, class_name)
+
+        # Instantiate with connector and config
+        return extractor_class(connector, extractor_config or {})
+
+    def _create_loader(
+        self,
+        connector: Connector,
+        loader_spec: Optional[str] = None,
+        loader_config: Optional[dict] = None,
+    ) -> Loader:
+        """Create loader instance using dynamic loading.
 
         Args:
-            conn_type: Connection type
             connector: Connector instance
+            loader_spec: Optional operator spec from YAML
+            loader_config: Optional config dict for loader
 
         Returns:
             Loader instance
@@ -322,11 +516,17 @@ class PipelineExecutor:
         Raises:
             PipelineExecutionError: If loader cannot be created
         """
-        if conn_type not in self._operator_registry:
-            raise PipelineExecutionError(f"Unsupported connection type: {conn_type}")
+        # Infer protocol from connector's connection string
+        protocol = self._get_connection_protocol(connector.config["connection_string"])
 
-        loader_class = self._operator_registry[conn_type]["loader"]
-        return loader_class(connector)
+        # Resolve operator
+        module_path, class_name = self._resolve_operator_spec(loader_spec, "loader", protocol)
+
+        # Load operator class
+        loader_class = self._load_operator_class(module_path, class_name)
+
+        # Instantiate with connector and config
+        return loader_class(connector, loader_config or {})
 
     def _create_buffer(self, pipeline: Pipeline, stream: Stream) -> Buffer:
         """Create a buffer instance.

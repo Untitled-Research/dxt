@@ -47,6 +47,38 @@ class SourceConfig(BaseModel):
         description="Additional options for this source",
     )
 
+    # Operator specification (full module paths)
+    connector: Optional[str] = PydanticField(
+        None,
+        description="Connector operator override (full module path, e.g., 'dxt.operators.postgres.connector.PostgresConnector')",
+    )
+
+    extractor: Optional[str] = PydanticField(
+        None,
+        description="Extractor operator override (full module path, e.g., 'dxt.operators.sql.extractor.SQLExtractor')",
+    )
+
+    loader: Optional[str] = PydanticField(
+        None,
+        description="Loader operator override (full module path, e.g., 'dxt.operators.postgres.copy_loader.PostgresCopyLoader')",
+    )
+
+    # Operator configuration
+    connector_config: Optional[dict[str, Any]] = PydanticField(
+        None,
+        description="Configuration passed to connector __init__",
+    )
+
+    extractor_config: Optional[dict[str, Any]] = PydanticField(
+        None,
+        description="Configuration passed to extractor __init__",
+    )
+
+    loader_config: Optional[dict[str, Any]] = PydanticField(
+        None,
+        description="Configuration passed to loader __init__",
+    )
+
     model_config = {"extra": "forbid"}
 
     @classmethod

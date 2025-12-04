@@ -13,6 +13,62 @@ from pydantic import BaseModel, Field as PydanticField, field_validator
 from dxt.models.stream import Stream
 
 
+class ExtractDefaults(BaseModel):
+    """Pipeline-level extract defaults.
+
+    Specifies default extractor operator and configuration that applies
+    to all streams unless overridden at stream level.
+
+    Examples:
+        >>> ExtractDefaults(
+        ...     extractor="dxt.operators.sql.SQLExtractor",
+        ...     batch_size=10000
+        ... )
+    """
+
+    extractor: Optional[str] = PydanticField(
+        None,
+        description="Default extractor operator (full module path)",
+    )
+
+    batch_size: Optional[int] = PydanticField(
+        None,
+        description="Default extract batch size",
+        gt=0,
+    )
+
+    # Allow additional config options
+    model_config = {"extra": "allow"}
+
+
+class LoadDefaults(BaseModel):
+    """Pipeline-level load defaults.
+
+    Specifies default loader operator and configuration that applies
+    to all streams unless overridden at stream level.
+
+    Examples:
+        >>> LoadDefaults(
+        ...     loader="dxt.operators.sql.SQLLoader",
+        ...     batch_size=5000
+        ... )
+    """
+
+    loader: Optional[str] = PydanticField(
+        None,
+        description="Default loader operator (full module path)",
+    )
+
+    batch_size: Optional[int] = PydanticField(
+        None,
+        description="Default load batch size",
+        gt=0,
+    )
+
+    # Allow additional config options
+    model_config = {"extra": "allow"}
+
+
 class ConnectionConfig(BaseModel):
     """Connection configuration for a data system.
 
@@ -136,6 +192,16 @@ class Pipeline(BaseModel):
     target: ConnectionConfig = PydanticField(
         ...,
         description="Target connection configuration",
+    )
+
+    extract: Optional[ExtractDefaults] = PydanticField(
+        None,
+        description="Pipeline-level extract defaults (operator and config)",
+    )
+
+    load: Optional[LoadDefaults] = PydanticField(
+        None,
+        description="Pipeline-level load defaults (operator and config)",
     )
 
     buffer: BufferConfig = PydanticField(

@@ -103,13 +103,12 @@ def test_stream_configuration():
         id="orders",
         source="public.orders",
         target="analytics.orders",
-        kind="table",
         tags=["critical", "daily"],
     )
 
     assert stream.id == "orders"
-    assert stream.source == "public.orders"
-    assert stream.target == "analytics.orders"
+    assert stream.source.value == "public.orders"
+    assert stream.target.value == "analytics.orders"
     assert "critical" in stream.tags
 
     # Incremental stream

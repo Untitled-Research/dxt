@@ -1,0 +1,95 @@
+version: 1
+name: complete_pipeline_example
+description: "Example showing the natural pipeline structure with extract/load top-level keys"
+
+# Source connection
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/source_db"
+
+# Target connection
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/target_db"
+
+# Extract configuration (pipeline-level defaults)
+extract:
+  extractor: dxt.operators.sql.SQLExtractor
+  batch_size: 10000
+
+# Load configuration (pipeline-level defaults)
+load:
+  loader: dxt.operators.sql.SQLLoader
+  batch_size: 5000
+
+# Buffer configuration
+buffer:
+  format: parquet
+  compression: snappy
+  persist: true
+  cleanup_on_success: true
+
+# Streams to process
+streams:
+  # Small dimension table - uses pipeline defaults
+  - id: countries
+    source: public.countries
+    target: staging.countries
+    fields:
+      - id: country_id
+        dtype: int32
+      - id: country_name
+        dtype: string
+    extract:
+      mode: full
+    load:
+      mode: replace
+
+  # Large fact table - override with PostgreSQL COPY for performance
+  - id: orders
+    source: public.orders
+    target:
+      type: relation
+      value: staging.orders
+      # Stream-level override: use high-performance COPY loader
+      loader: dxt.operators.postgres.PostgresCopyLoader
+      loader_config:
+        copy_format: csv
+        batch_size: 50000
+    fields:
+      - id: order_id
+        dtype: int64
+      - id: customer_id
+        dtype: int64
+      - id: order_date
+        dtype: timestamp
+      - id: amount
+        dtype: decimal
+        precision: 10
+        scale: 2
+    extract:
+      mode: incremental
+      watermark_field: updated_at
+      watermark_type: timestamp
+      batch_size: 20000  # Stream-level override
+    load:
+      mode: append
+
+  # Incremental stream with upsert
+  - id: customers
+    source: public.customers
+    target: staging.customers
+    fields:
+      - id: customer_id
+        dtype: int64
+      - id: email
+        dtype: string
+      - id: name
+        dtype: string
+      - id: updated_at
+        dtype: timestamp
+    extract:
+      mode: incremental
+      watermark_field: updated_at
+      watermark_type: timestamp
+    load:
+      mode: upsert
+      upsert_keys: [customer_id]

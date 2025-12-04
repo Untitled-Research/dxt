@@ -5,7 +5,13 @@ configuration structures (YAML schemas) and results.
 """
 
 from dxt.models.field import DXTType, Field, SourceField, TargetField
-from dxt.models.pipeline import BufferConfig, ConnectionConfig, Pipeline
+from dxt.models.pipeline import (
+    BufferConfig,
+    ConnectionConfig,
+    ExtractDefaults,
+    LoadDefaults,
+    Pipeline,
+)
 from dxt.models.results import ExecutionResult, ExtractResult, LoadResult, StreamResult
 from dxt.models.stream import ExtractConfig, LoadConfig, Stream
 
@@ -23,6 +29,8 @@ __all__ = [
     "Pipeline",
     "ConnectionConfig",
     "BufferConfig",
+    "ExtractDefaults",
+    "LoadDefaults",
     # Result models
     "ExtractResult",
     "LoadResult",

@@ -1,0 +1,32 @@
+version: 1
+name: pipeline_with_defaults
+description: "Pipeline using defaults - no operator specs needed"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+buffer:
+  format: memory
+
+streams:
+  # This stream uses default operators (inferred from connection protocol)
+  # PostgresExtractor and PostgresLoader will be used automatically
+  - id: film
+    source: public.film
+    target: public.film
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+      - id: release_year
+        dtype: int32
+    extract:
+      mode: full
+      batch_size: 100
+    load:
+      mode: append
+      batch_size: 100

@@ -1,0 +1,59 @@
+version: 1
+name: pipeline_with_pipeline_defaults
+description: "Pipeline with pipeline-level defaults and stream overrides"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+# Pipeline-level extract defaults
+extract:
+  extractor: dxt.operators.sql.SQLExtractor
+  batch_size: 1000
+
+# Pipeline-level load defaults
+load:
+  loader: dxt.operators.sql.SQLLoader
+  batch_size: 500
+
+buffer:
+  format: memory
+
+streams:
+  # Small dimension table - uses pipeline defaults
+  - id: language
+    source: public.language
+    target: public.language
+    fields:
+      - id: language_id
+        dtype: int32
+      - id: name
+        dtype: string
+    extract:
+      mode: full
+    load:
+      mode: replace
+
+  # Large fact table - overrides loader with COPY variant
+  - id: film_large
+    source: public.film
+    target:
+      type: relation
+      value: public.film_large
+      # Override: use PostgreSQL COPY loader for better performance
+      loader: dxt.operators.postgres.PostgresCopyLoader
+      loader_config:
+        copy_format: csv
+        batch_size: 2000  # Overrides pipeline default
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+    extract:
+      mode: full
+      batch_size: 1000
+    load:
+      mode: append

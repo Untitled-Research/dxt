@@ -221,7 +221,13 @@ class PostgresTypeMapper(TypeMapper):
             else:
                 return normalized
 
-    def get_ddl_type(self, dxt_type: DXTType, precision: Optional[int] = None, scale: Optional[int] = None, target_hint: Optional[str] = None) -> str:
+    def get_ddl_type(
+        self,
+        dxt_type: DXTType,
+        precision: Optional[int] = None,
+        scale: Optional[int] = None,
+        target_hint: Optional[str] = None,
+    ) -> str:
         """Get PostgreSQL DDL type string with precision/scale.
 
         Args:

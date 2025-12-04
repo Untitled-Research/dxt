@@ -1,0 +1,32 @@
+version: 1
+name: pipeline_with_invalid_operator
+description: "Pipeline with non-existent operator to test error handling"
+
+source:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dvdrental"
+
+target:
+  connection: "postgresql+psycopg://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/${PGDATABASE}"
+
+buffer:
+  format: memory
+
+streams:
+  # This stream specifies a non-existent operator
+  # Should fail with descriptive error message
+  - id: test_invalid
+    source: public.film
+    target:
+      type: relation
+      value: public.film_test
+      # This operator doesn't exist - should fail gracefully
+      loader: dxt.operators.postgres.NonExistentLoader
+    fields:
+      - id: film_id
+        dtype: int32
+      - id: title
+        dtype: string
+    extract:
+      mode: full
+    load:
+      mode: append
