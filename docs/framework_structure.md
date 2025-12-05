@@ -17,7 +17,7 @@ dxt/
 │   ├── field.py                    # Field, SourceField, TargetField, DXTType
 │   ├── stream.py                   # Stream, ExtractConfig, LoadConfig
 │   ├── pipeline.py                 # Pipeline, ConnectionConfig, BufferConfig
-│   └── results.py                  # ExtractResult, LoadResult, ExecutionResult
+│   └── results.py                  # ExtractResult, LoadResult, RunResult
 │
 ├── core/                           # Abstract base classes
 │   ├── __init__.py                 # Export core ABCs
@@ -73,7 +73,7 @@ Custom exception hierarchy for DXT:
 - `ExtractResult` - Extraction metrics and metadata
 - `LoadResult` - Load metrics and metadata
 - `StreamResult` - Combined extract + load result
-- `ExecutionResult` - Complete pipeline execution result
+- `RunResult` - Complete pipeline run result
 
 ### `dxt/core/` - Abstract Base Classes
 
@@ -149,7 +149,7 @@ from dxt import (
     ExtractConfig, LoadConfig,
 
     # Results
-    ExtractResult, LoadResult, ExecutionResult,
+    ExtractResult, LoadResult, RunResult,
 
     # Buffers
     MemoryBuffer, ParquetBuffer,
@@ -214,8 +214,8 @@ from dxt.exceptions import ExtractorError, BufferError
 4. Implement PostgresLoader
 5. Implement PostgresTypeMapper
 
-### Phase 3: Pipeline Executor
-1. Create `dxt/core/pipeline_executor.py`
+### Phase 3: Pipeline Runner
+1. Create `dxt/core/pipeline_runner.py`
 2. Orchestrate extract → buffer → load flow
 3. Handle errors and rollbacks
 4. Integrate with CLI

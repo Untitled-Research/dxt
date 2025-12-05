@@ -1,7 +1,7 @@
-"""YAML parsing utilities for DXT.
+"""YAML utilities for DXT.
 
-This module provides functions for loading and parsing pipeline
-and configuration YAML files with validation.
+This module provides utility functions for loading and parsing YAML files
+with environment variable substitution.
 """
 
 from __future__ import annotations
@@ -12,10 +12,8 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-from pydantic import ValidationError as PydanticValidationError
 
 from dxt.exceptions import ValidationError
-from dxt.models.pipeline import Pipeline
 
 
 def substitute_env_vars(data: Any) -> Any:
@@ -91,25 +89,6 @@ def load_yaml(path: Path) -> dict[str, Any]:
         raise ValidationError(f"File not found: {path}")
     except Exception as e:
         raise ValidationError(f"Failed to load {path}: {e}") from e
-
-
-def load_pipeline(path: Path) -> Pipeline:
-    """Load and validate a pipeline from a YAML file.
-
-    Args:
-        path: Path to pipeline YAML file
-
-    Returns:
-        Validated Pipeline object
-
-    Raises:
-        ValidationError: If pipeline is invalid
-    """
-    try:
-        data = load_yaml(path)
-        return Pipeline(**data)
-    except PydanticValidationError as e:
-        raise ValidationError(f"Invalid pipeline in {path}: {e}") from e
 
 
 def save_yaml(data: dict[str, Any], path: Path) -> None:

@@ -1148,7 +1148,7 @@ dxt/
 │   ├── models.py               # Stream, ExtractConfig, LoadConfig, Field
 │   ├── pipeline.py             # Pipeline model & executor
 │   ├── selector.py             # Selector parsing/matching
-│   ├── results.py              # ExtractResult, LoadResult, ExecutionResult
+│   ├── results.py              # ExtractResult, LoadResult, RunResult
 │   └── sql_builder.py          # Base SQLBuilder class (for SQL systems)
 ├── operators/                  # Grouped by data system
 │   ├── __init__.py

@@ -12,7 +12,13 @@ from dxt.models.pipeline import (
     LoadDefaults,
     Pipeline,
 )
-from dxt.models.results import ExecutionResult, ExtractResult, LoadResult, StreamResult
+from dxt.models.results import (
+    ExecutionResult,
+    ExtractResult,
+    LoadResult,
+    RunResult,
+    StreamResult,
+)
 from dxt.models.stream import ExtractConfig, LoadConfig, Stream
 
 __all__ = [
@@ -35,5 +41,6 @@ __all__ = [
     "ExtractResult",
     "LoadResult",
     "StreamResult",
-    "ExecutionResult",
+    "RunResult",
+    "ExecutionResult",  # Backwards compatibility
 ]

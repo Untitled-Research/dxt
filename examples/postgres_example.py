@@ -10,10 +10,9 @@ Prerequisites:
 
 from decimal import Decimal
 
-from dxt import DXTType, ExtractConfig, Field, LoadConfig, Pipeline, Stream
-from dxt.core import PipelineExecutor
+from dxt import DXTType, ExtractConfig, Field, LoadConfig, Pipeline, PipelineRunner, Stream
 from dxt.models import BufferConfig, ConnectionConfig
-from dxt.operators.postgres import PostgresConnector
+from dxt.providers.postgres import PostgresConnector
 
 
 def setup_test_data():
@@ -89,9 +88,9 @@ def example_full_load():
         ],
     )
 
-    # Execute pipeline
-    executor = PipelineExecutor()
-    result = executor.execute(pipeline)
+    # Run pipeline
+    runner = PipelineRunner()
+    result = runner.run(pipeline)
 
     # Display results
     print(f"\nPipeline: {result.pipeline_name}")
@@ -146,9 +145,9 @@ def example_filtered_load():
         ],
     )
 
-    # Execute pipeline
-    executor = PipelineExecutor()
-    result = executor.execute(pipeline)
+    # Run pipeline
+    runner = PipelineRunner()
+    result = runner.run(pipeline)
 
     # Display results
     print(f"\nPipeline: {result.pipeline_name}")
@@ -193,8 +192,8 @@ def example_upsert_load():
         ],
     )
 
-    executor = PipelineExecutor()
-    result = executor.execute(pipeline)
+    runner = PipelineRunner()
+    result = runner.run(pipeline)
 
     print(f"\nInitial upsert: {result.total_records_transferred} records")
 
@@ -210,7 +209,7 @@ def example_upsert_load():
             WHERE order_id IN (1, 2);
         """)
 
-    result2 = executor.execute(pipeline)
+    result2 = runner.run(pipeline)
     print(f"Second upsert: {result2.total_records_transferred} records (updates existing)")
 
     return result2

@@ -2,7 +2,7 @@
 
 import pytest
 
-from dxt.core.pipeline_executor import PipelineExecutor
+from dxt.core.pipeline_runner import PipelineRunner
 from dxt.exceptions import PipelineExecutionError
 
 
@@ -11,7 +11,7 @@ class TestOperatorResolution:
 
     def test_resolve_full_module_path_with_filename(self):
         """Test resolving full module paths with filename."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         module_path, class_name = executor._resolve_operator_spec(
             "dxt.providers.postgres.copy_loader.PostgresCopyLoader", "loader", "postgresql"
@@ -22,7 +22,7 @@ class TestOperatorResolution:
 
     def test_resolve_package_reexport_path(self):
         """Test resolving package re-export paths (shorter form)."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         # This should work because PostgresCopyLoader is re-exported in __init__.py
         module_path, class_name = executor._resolve_operator_spec(
@@ -34,7 +34,7 @@ class TestOperatorResolution:
 
     def test_resolve_default_operator(self):
         """Test default operator resolution."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         # None with postgresql → PostgresLoader (default)
         module_path, class_name = executor._resolve_operator_spec(
@@ -46,7 +46,7 @@ class TestOperatorResolution:
 
     def test_resolve_custom_operator(self):
         """Test loading custom user operator."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         # Custom operator from user's codebase
         module_path, class_name = executor._resolve_operator_spec(
@@ -58,7 +58,7 @@ class TestOperatorResolution:
 
     def test_missing_protocol_error(self):
         """Test error when no default operator for protocol."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         with pytest.raises(
             PipelineExecutionError, match="No default operator registered for protocol"
@@ -67,14 +67,14 @@ class TestOperatorResolution:
 
     def test_load_operator_class_module_not_found(self):
         """Test descriptive error when operator module can't be loaded."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         with pytest.raises(PipelineExecutionError, match="Failed to import operator module"):
             executor._load_operator_class("nonexistent.module", "NonexistentClass")
 
     def test_load_operator_class_class_not_found(self):
         """Test descriptive error when class doesn't exist in module."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         with pytest.raises(PipelineExecutionError, match="Class .* not found in module"):
             # Try to import a class that doesn't exist from a real module
@@ -86,7 +86,7 @@ class TestOperatorLoading:
 
     def test_load_postgres_copy_loader_full_path(self):
         """Test loading PostgresCopyLoader with full module path."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         operator_class = executor._load_operator_class(
             "dxt.providers.postgres.copy_loader", "PostgresCopyLoader"
@@ -96,7 +96,7 @@ class TestOperatorLoading:
 
     def test_load_postgres_copy_loader_package_export(self):
         """Test loading PostgresCopyLoader via package re-export."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         # This should work because PostgresCopyLoader is in __all__
         operator_class = executor._load_operator_class(
@@ -107,7 +107,7 @@ class TestOperatorLoading:
 
     def test_load_sqlite_loader(self):
         """Test loading SQLiteLoader."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         operator_class = executor._load_operator_class("dxt.providers.sqlite", "SQLiteLoader")
 
@@ -119,7 +119,7 @@ class TestDefaultOperators:
 
     def test_get_default_postgres_loader(self):
         """Test getting default PostgreSQL loader."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         module_path, class_name = executor._get_default_operator("postgresql", "loader")
 
@@ -128,7 +128,7 @@ class TestDefaultOperators:
 
     def test_get_default_sqlite_extractor(self):
         """Test getting default SQLite extractor."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         module_path, class_name = executor._get_default_operator("sqlite", "extractor")
 
@@ -137,7 +137,7 @@ class TestDefaultOperators:
 
     def test_protocol_normalization(self):
         """Test protocol normalization strips dialect suffix."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         # postgresql+psycopg should normalize to postgresql
         module_path, class_name = executor._get_default_operator(
@@ -153,7 +153,7 @@ class TestConfigMerging:
 
     def test_merge_configs_both_none(self):
         """Test merging when both configs are None."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         result = executor._merge_configs(None, None)
 
@@ -161,7 +161,7 @@ class TestConfigMerging:
 
     def test_merge_configs_base_only(self):
         """Test merging when only base config exists."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         base = {"batch_size": 1000}
         result = executor._merge_configs(base, None)
@@ -170,7 +170,7 @@ class TestConfigMerging:
 
     def test_merge_configs_override_only(self):
         """Test merging when only override config exists."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         override = {"batch_size": 2000}
         result = executor._merge_configs(None, override)
@@ -179,7 +179,7 @@ class TestConfigMerging:
 
     def test_merge_configs_override_takes_precedence(self):
         """Test that override config takes precedence."""
-        executor = PipelineExecutor()
+        executor = PipelineRunner()
 
         base = {"batch_size": 1000, "compression": "snappy"}
         override = {"batch_size": 2000}

@@ -1,7 +1,7 @@
-"""Result models for extract, load, and pipeline execution.
+"""Result models for extract, load, and pipeline runs.
 
 This module defines result classes that capture outcomes and metrics
-from extract, load, and overall pipeline operations.
+from extract, load, and overall pipeline run operations.
 """
 
 from __future__ import annotations
@@ -191,11 +191,11 @@ class StreamResult(BaseModel):
         return 0
 
 
-class ExecutionResult(BaseModel):
-    """Result of a complete pipeline execution.
+class RunResult(BaseModel):
+    """Result of a complete pipeline run.
 
     Contains results for all streams processed, along with
-    summary statistics and overall execution metadata.
+    summary statistics and overall run metadata.
     """
 
     pipeline_name: str = PydanticField(
@@ -203,9 +203,14 @@ class ExecutionResult(BaseModel):
         description="Pipeline name/identifier",
     )
 
+    run_id: Optional[str] = PydanticField(
+        None,
+        description="Unique run identifier",
+    )
+
     success: bool = PydanticField(
         ...,
-        description="Whether pipeline execution succeeded overall",
+        description="Whether pipeline run succeeded overall",
     )
 
     streams_processed: int = PydanticField(
@@ -234,7 +239,7 @@ class ExecutionResult(BaseModel):
 
     duration_seconds: float = PydanticField(
         0.0,
-        description="Total pipeline execution duration in seconds",
+        description="Total pipeline run duration in seconds",
         ge=0.0,
     )
 
@@ -275,3 +280,7 @@ class ExecutionResult(BaseModel):
         if self.streams_processed == 0:
             return 0.0
         return (self.streams_failed / self.streams_processed) * 100.0
+
+
+# Backwards compatibility alias
+ExecutionResult = RunResult

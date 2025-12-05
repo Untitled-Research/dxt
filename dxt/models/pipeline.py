@@ -6,11 +6,15 @@ pipeline configuration, along with connection and buffer settings.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Optional
 
-from pydantic import BaseModel, Field as PydanticField, field_validator
+from pydantic import BaseModel, Field as PydanticField, ValidationError as PydanticValidationError, field_validator
 
 from dxt.models.stream import Stream
+
+if TYPE_CHECKING:
+    from typing import Self
 
 
 class ExtractDefaults(BaseModel):
@@ -279,3 +283,35 @@ class Pipeline(BaseModel):
             List of stream identifiers
         """
         return [stream.id for stream in self.streams]
+
+    @classmethod
+    def load_from_yaml(cls, path: Path | str) -> "Pipeline":
+        """Load and validate a pipeline from a YAML file.
+
+        Supports environment variable substitution using ${VAR} and
+        ${VAR:-default} syntax in the YAML content.
+
+        Args:
+            path: Path to pipeline YAML file
+
+        Returns:
+            Validated Pipeline object
+
+        Raises:
+            ValidationError: If file cannot be read, parsed, or pipeline is invalid
+
+        Examples:
+            >>> pipeline = Pipeline.load_from_yaml("pipelines/my_pipeline.yaml")
+            >>> print(pipeline.name)
+        """
+        from dxt.exceptions import ValidationError
+        from dxt.utils.yaml_utils import load_yaml
+
+        if isinstance(path, str):
+            path = Path(path)
+
+        try:
+            data = load_yaml(path)
+            return cls(**data)
+        except PydanticValidationError as e:
+            raise ValidationError(f"Invalid pipeline in {path}: {e}") from e

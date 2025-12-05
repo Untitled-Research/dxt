@@ -16,7 +16,7 @@ Successfully implemented the complete DXT core framework with a functional Postg
    - **Field models**: Field, SourceField, TargetField, DXTType enum (20+ types)
    - **Stream models**: Stream, ExtractConfig, LoadConfig
    - **Pipeline models**: Pipeline, ConnectionConfig, BufferConfig
-   - **Result models**: ExtractResult, LoadResult, StreamResult, ExecutionResult
+   - **Result models**: ExtractResult, LoadResult, StreamResult, RunResult
 
 3. **Core ABCs** (`dxt/core/`)
    - Connector - Connection management
@@ -24,7 +24,7 @@ Successfully implemented the complete DXT core framework with a functional Postg
    - Loader - Data loading interface
    - Buffer - Temporary storage interface
    - TypeMapper - Type conversion interface
-   - PipelineExecutor - Orchestration engine
+   - PipelineRunner - Orchestration engine
 
 4. **Buffer Implementations** (`dxt/buffers/`)
    - MemoryBuffer - In-memory storage
@@ -40,7 +40,7 @@ Successfully implemented the complete DXT core framework with a functional Postg
 
 ### Phase 3: Pipeline Execution ✅
 
-6. **PipelineExecutor** ([dxt/core/pipeline_executor.py](../dxt/core/pipeline_executor.py))
+6. **PipelineRunner** ([dxt/core/pipeline_runner.py](../dxt/core/pipeline_runner.py))
    - Orchestrates extract → buffer → load flow
    - Operator registry and discovery
    - Stream selection
@@ -81,7 +81,7 @@ dxt/
 │   ├── loader.py
 │   ├── buffer.py
 │   ├── type_mapper.py
-│   └── pipeline_executor.py             # NEW: Orchestrator
+│   └── pipeline_runner.py               # NEW: Orchestrator
 ├── buffers/                             # Buffer implementations
 │   ├── memory.py
 │   └── parquet.py
@@ -212,7 +212,7 @@ Core dependencies added to `pyproject.toml`:
 
 ```python
 from dxt import Pipeline, Stream, Field, DXTType, ConnectionConfig
-from dxt.core import PipelineExecutor
+from dxt.core import PipelineRunner
 
 # Define pipeline
 pipeline = Pipeline(
@@ -238,9 +238,9 @@ pipeline = Pipeline(
     ],
 )
 
-# Execute
-executor = PipelineExecutor()
-result = executor.execute(pipeline)
+# Run
+runner = PipelineRunner()
+result = runner.run(pipeline)
 
 print(f"Transferred {result.total_records_transferred} records")
 ```
@@ -280,7 +280,7 @@ stream = Stream(
 ## What's Next
 
 ### Immediate Enhancements
-1. **CLI Integration** - Connect PipelineExecutor to CLI commands
+1. **CLI Integration** - Connect PipelineRunner to CLI commands
 2. **YAML Pipeline Files** - Load pipelines from YAML
 3. **Logging** - Implement structured logging with structlog
 4. **Project Configuration** - Support dxt_project.yaml for connection references

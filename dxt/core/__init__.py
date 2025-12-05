@@ -5,17 +5,22 @@ that define the interfaces for all extensible components.
 """
 
 from dxt.core.buffer import Buffer
+from dxt.core.config import DXTConfig, config, load_config
 from dxt.core.connector import Connector
 from dxt.core.extractor import Extractor
 from dxt.core.loader import Loader
-from dxt.core.pipeline_executor import PipelineExecutor
+from dxt.core.pipeline_runner import PipelineExecutor, PipelineRunner
 from dxt.core.type_mapper import TypeMapper
 
 __all__ = [
     "Buffer",
     "Connector",
+    "DXTConfig",
     "Extractor",
     "Loader",
+    "PipelineExecutor",  # Backwards compatibility
+    "PipelineRunner",
     "TypeMapper",
-    "PipelineExecutor",
+    "config",
+    "load_config",
 ]

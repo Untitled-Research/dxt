@@ -1,15 +1,16 @@
 """DXT CLI - Command-line interface for the data move tool."""
 
 import sys
+from typing import Optional
 
 import typer
 from pathlib import Path
 from typing_extensions import Annotated
 
 from dxt import __version__
-from dxt.core.pipeline_executor import PipelineExecutor
+from dxt.core.pipeline_runner import PipelineRunner
 from dxt.exceptions import PipelineExecutionError, ValidationError
-from dxt.utils.yaml_parser import load_pipeline
+from dxt.models.pipeline import Pipeline
 
 app = typer.Typer(
     name="dxt",
@@ -25,13 +26,42 @@ def version_callback(value: bool) -> None:
         raise typer.Exit()
 
 
+def _display_result(result, verbose: bool = False) -> None:
+    """Display run result to console."""
+    typer.echo("\n" + "=" * 60)
+    if result.success:
+        typer.secho("Pipeline run succeeded!", fg=typer.colors.GREEN, bold=True)
+    else:
+        typer.secho("Pipeline run failed!", fg=typer.colors.RED, bold=True)
+        if result.error_message:
+            typer.echo(f"Error: {result.error_message}")
+
+    typer.echo(f"\nRun ID: {result.run_id}")
+    typer.echo(f"Streams processed: {result.streams_processed}")
+    typer.echo(f"Streams succeeded: {result.streams_succeeded}")
+    typer.echo(f"Streams failed: {result.streams_failed}")
+    typer.echo(f"Total records transferred: {result.total_records_transferred:,}")
+    typer.echo(f"Duration: {result.duration_seconds:.2f}s")
+
+    if verbose and result.stream_results:
+        typer.echo("\nStream details:")
+        for stream_result in result.stream_results:
+            status = "✓" if stream_result.success else "✗"
+            typer.echo(
+                f"  {status} {stream_result.stream_id}: "
+                f"{stream_result.records_transferred:,} records"
+            )
+            if not stream_result.success and stream_result.error_message:
+                typer.echo(f"    Error: {stream_result.error_message}")
+
+
 @app.callback()
 def main(
     version: Annotated[
         bool,
         typer.Option(
             "--version",
-            "-v",
+            "-V",
             callback=version_callback,
             is_eager=True,
             help="Show version and exit",
@@ -54,24 +84,28 @@ def run(
             readable=True,
         ),
     ],
+    run_id: Annotated[
+        Optional[str],
+        typer.Option("-r", "--run-id", help="Run identifier (auto-generated if not provided)"),
+    ] = None,
     dry_run: Annotated[
         bool,
         typer.Option("--dry-run", help="Validate pipeline without executing"),
     ] = False,
     select: Annotated[
-        str,
-        typer.Option("--select", help="Stream selector (e.g., 'orders', 'tag:critical', '*')"),
+        Optional[str],
+        typer.Option("--select", "-s", help="Stream selector (e.g., 'orders', 'tag:critical', '*')"),
     ] = None,
     verbose: Annotated[
         bool,
         typer.Option("--verbose", "-v", help="Verbose output"),
     ] = False,
 ) -> None:
-    """Run a data pipeline from a YAML file."""
+    """Run a data pipeline (extract + load)."""
     try:
         # Load and validate pipeline
         typer.echo(f"Loading pipeline: {pipeline_path}")
-        pipeline = load_pipeline(pipeline_path)
+        pipeline = Pipeline.load_from_yaml(pipeline_path)
 
         typer.echo(f"Pipeline: {pipeline.name}")
         if pipeline.description:
@@ -83,35 +117,138 @@ def run(
             typer.echo("Pipeline is valid!")
             return
 
-        # Execute pipeline
-        typer.echo("\nExecuting pipeline...")
-        executor = PipelineExecutor()
-        result = executor.execute(pipeline, dry_run=False, select=select)
+        # Run pipeline
+        typer.echo("\nRunning pipeline...")
+        runner = PipelineRunner()
+        result = runner.run(pipeline, dry_run=False, select=select, run_id=run_id)
 
-        # Display results
-        typer.echo("\n" + "="*60)
-        if result.success:
-            typer.secho("Pipeline execution succeeded!", fg=typer.colors.GREEN, bold=True)
-        else:
-            typer.secho("Pipeline execution failed!", fg=typer.colors.RED, bold=True)
-            if result.error_message:
-                typer.echo(f"Error: {result.error_message}")
-
-        typer.echo(f"\nStreams processed: {result.streams_processed}")
-        typer.echo(f"Streams succeeded: {result.streams_succeeded}")
-        typer.echo(f"Streams failed: {result.streams_failed}")
-        typer.echo(f"Total records transferred: {result.total_records_transferred:,}")
-        typer.echo(f"Duration: {result.duration_seconds:.2f}s")
-
-        if verbose and result.stream_results:
-            typer.echo("\nStream details:")
-            for stream_result in result.stream_results:
-                status = "✓" if stream_result.success else "✗"
-                typer.echo(f"  {status} {stream_result.stream_id}: {stream_result.records_transferred:,} records")
-                if not stream_result.success and stream_result.error_message:
-                    typer.echo(f"    Error: {stream_result.error_message}")
+        _display_result(result, verbose)
 
         # Exit with error code if failed
+        if not result.success:
+            raise typer.Exit(code=1)
+
+    except ValidationError as e:
+        typer.secho(f"Validation error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    except PipelineExecutionError as e:
+        typer.secho(f"Execution error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.secho(f"Unexpected error: {e}", fg=typer.colors.RED, err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def extract(
+    pipeline_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the YAML pipeline file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    run_id: Annotated[
+        Optional[str],
+        typer.Option("-r", "--run-id", help="Run identifier (auto-generated if not provided)"),
+    ] = None,
+    select: Annotated[
+        Optional[str],
+        typer.Option("--select", "-s", help="Stream selector (e.g., 'orders', 'tag:critical', '*')"),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Verbose output"),
+    ] = False,
+) -> None:
+    """Extract data from source to buffer (no load).
+
+    Use this to extract data and stage it for later loading.
+    The run_id can be used with 'dxt load' to load the staged data.
+    """
+    try:
+        typer.echo(f"Loading pipeline: {pipeline_path}")
+        pipeline = Pipeline.load_from_yaml(pipeline_path)
+
+        typer.echo(f"Pipeline: {pipeline.name}")
+        typer.echo(f"Streams: {pipeline.stream_count}")
+
+        typer.echo("\nExtracting data...")
+        runner = PipelineRunner()
+        result = runner.extract(pipeline, select=select, run_id=run_id)
+
+        _display_result(result, verbose)
+
+        if result.success:
+            typer.echo(f"\nData staged. Use 'dxt load {pipeline_path} -r {result.run_id}' to load.")
+
+        if not result.success:
+            raise typer.Exit(code=1)
+
+    except ValidationError as e:
+        typer.secho(f"Validation error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    except PipelineExecutionError as e:
+        typer.secho(f"Execution error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.secho(f"Unexpected error: {e}", fg=typer.colors.RED, err=True)
+        if verbose:
+            import traceback
+            traceback.print_exc()
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def load(
+    pipeline_path: Annotated[
+        Path,
+        typer.Argument(
+            help="Path to the YAML pipeline file",
+            exists=True,
+            file_okay=True,
+            dir_okay=False,
+            readable=True,
+        ),
+    ],
+    run_id: Annotated[
+        str,
+        typer.Option("-r", "--run-id", help="Run identifier (required - from a previous extract)"),
+    ],
+    select: Annotated[
+        Optional[str],
+        typer.Option("--select", "-s", help="Stream selector (e.g., 'orders', 'tag:critical', '*')"),
+    ] = None,
+    verbose: Annotated[
+        bool,
+        typer.Option("--verbose", "-v", help="Verbose output"),
+    ] = False,
+) -> None:
+    """Load data from buffer to target.
+
+    Use this to load data that was previously extracted with 'dxt extract'.
+    Requires --run-id to identify which extracted data to load.
+    """
+    try:
+        typer.echo(f"Loading pipeline: {pipeline_path}")
+        pipeline = Pipeline.load_from_yaml(pipeline_path)
+
+        typer.echo(f"Pipeline: {pipeline.name}")
+        typer.echo(f"Run ID: {run_id}")
+        typer.echo(f"Streams: {pipeline.stream_count}")
+
+        typer.echo("\nLoading data...")
+        runner = PipelineRunner()
+        result = runner.load(pipeline, run_id=run_id, select=select)
+
+        _display_result(result, verbose)
+
         if not result.success:
             raise typer.Exit(code=1)
 
@@ -145,7 +282,7 @@ def validate(
     """Validate a pipeline YAML file."""
     try:
         typer.echo(f"Validating pipeline: {pipeline_path}")
-        pipeline = load_pipeline(pipeline_path)
+        pipeline = Pipeline.load_from_yaml(pipeline_path)
 
         typer.secho("✓ Pipeline is valid!", fg=typer.colors.GREEN, bold=True)
         typer.echo(f"\nPipeline: {pipeline.name}")

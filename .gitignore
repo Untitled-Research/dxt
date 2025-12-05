@@ -90,6 +90,7 @@ venv.bak/
 !template.env
 .data
 .bak
+.dxt
 **/*scratch*
 
 

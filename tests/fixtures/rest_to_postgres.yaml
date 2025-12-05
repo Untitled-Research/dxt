@@ -1,0 +1,116 @@
+# REST API to PostgreSQL Pipeline
+# Extracts data from JSONPlaceholder API and loads to PostgreSQL
+version: 1
+name: rest_to_postgres
+description: "Extract users and posts from JSONPlaceholder API to PostgreSQL"
+
+source:
+  # REST API source - uses https:// protocol
+  connection: "https://jsonplaceholder.typicode.com"
+
+target:
+  # PostgreSQL target - uses environment variables for credentials
+  # Note: Uses 'dxt' database explicitly for test isolation
+  connection: "postgresql://${PGUSER}:${PGPASSWORD}@${PGHOST}:${PGPORT}/dxt"
+
+buffer:
+  format: memory
+  cleanup_on_success: true
+
+streams:
+  # Extract posts from API
+  - id: api_posts
+    source:
+      type: http
+      value: /posts
+    target:
+      type: relation
+      value: test_api_posts
+    fields:
+      - id: id
+        dtype: int64
+      - id: user_id
+        dtype: int64
+        source: userId
+      - id: title
+        dtype: string
+      - id: body
+        dtype: string
+    extract:
+      mode: full
+      batch_size: 50
+    load:
+      mode: replace
+      batch_size: 50
+
+  # Extract users with nested address/company fields flattened
+  - id: api_users
+    source:
+      type: http
+      value: /users
+    target:
+      type: relation
+      value: test_api_users
+    fields:
+      - id: id
+        dtype: int64
+      - id: name
+        dtype: string
+      - id: username
+        dtype: string
+      - id: email
+        dtype: string
+      - id: phone
+        dtype: string
+      # Nested address fields using JSON path
+      - id: city
+        dtype: string
+        source: address.city
+      - id: zipcode
+        dtype: string
+        source: address.zipcode
+      - id: lat
+        dtype: string
+        source: address.geo.lat
+      - id: lng
+        dtype: string
+        source: address.geo.lng
+      # Company info
+      - id: company_name
+        dtype: string
+        source: company.name
+    extract:
+      mode: full
+      batch_size: 50
+    load:
+      mode: replace
+      batch_size: 50
+
+  # Extract todos with boolean field
+  - id: api_todos
+    source:
+      type: http
+      value: /todos
+      options:
+        # Filter to only user 1's todos
+        params:
+          userId: 1
+    target:
+      type: relation
+      value: test_api_todos
+    fields:
+      - id: id
+        dtype: int64
+      - id: user_id
+        dtype: int64
+        source: userId
+      - id: title
+        dtype: string
+      - id: completed
+        dtype: bool
+    extract:
+      mode: full
+      batch_size: 100
+    load:
+      mode: replace
+      batch_size: 100

@@ -7,13 +7,14 @@ from dxt.models import (
     BufferConfig,
     ConnectionConfig,
     DXTType,
-    ExecutionResult,
+    ExecutionResult,  # Backwards compatibility
     ExtractConfig,
     ExtractResult,
     Field,
     LoadConfig,
     LoadResult,
     Pipeline,
+    RunResult,
     SourceField,
     Stream,
     StreamResult,
@@ -21,7 +22,7 @@ from dxt.models import (
 )
 
 # Re-export core classes for custom operators
-from dxt.core import Buffer, Connector, Extractor, Loader, TypeMapper
+from dxt.core import Buffer, Connector, Extractor, Loader, PipelineRunner, TypeMapper
 
 # Re-export buffer implementations
 from dxt.buffers import MemoryBuffer, ParquetBuffer
@@ -43,12 +44,14 @@ __all__ = [
     "ExtractResult",
     "LoadResult",
     "StreamResult",
-    "ExecutionResult",
+    "RunResult",
+    "ExecutionResult",  # Backwards compatibility
     # Core ABCs
     "Buffer",
     "Connector",
     "Extractor",
     "Loader",
+    "PipelineRunner",
     "TypeMapper",
     # Buffers
     "MemoryBuffer",
